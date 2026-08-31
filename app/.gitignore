@@ -1,0 +1,39 @@
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== 環境変数 =====
+# DB のパスワードや JWT の秘密鍵を置く場所。絶対にコミットしないこと。
+# 代わりに .env.example に「キー名だけ」を書いてチームで共有する。
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ===== エディタ / IDE =====
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.iml
+*.swp
+*~
+
+# ===== ログ =====
+*.log
+logs/
+
+# ===== ビルド生成物（保険） =====
+# backend/.gitignore と frontend/.gitignore で既に除外されているが、
+# それらが消えたり別ディレクトリを追加したときのために app/ 全体にも掛けておく
+node_modules/
+dist/
+build/
+.gradle/
+out/
+target/
+*.jar
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# ===== ツールのキャッシュ =====
+.vite/
+*.tsbuildinfo
