@@ -10,6 +10,7 @@
 | 項目 | 内容 |
 | --- | --- |
 | ベースURL | `https://api.frontier-ems.example.co.jp/v1` |
+| ログインID | メールアドレス（`email`）。社員番号（`employee_code`）はアカウント作成時の本人確認にのみ使う |
 | 認証方式 | Bearer トークン方式。`Authorization: Bearer {access_token}` ヘッダーを付与する（詳細は下記「認証トークンの仕様」） |
 | 認証不要API | `POST /auth/login`、`POST /auth/refresh`、`POST /accounts` の3つのみ。それ以外は全て認証必須 |
 | リクエスト形式 | `Content-Type: application/json`（ファイルアップロードのみ `multipart/form-data`） |
@@ -106,10 +107,10 @@ JWT のようにトークン自体へ情報を埋め込むのではなく、**�
 
 | No | エンドポイント | リクエスト | レスポンス | エラー |
 | --- | --- | --- | --- | --- |
-| 1.1 ログイン | `POST /auth/login`（認証不要） | `{ "employee_code":"EMP00123", "password":"********" }` | 200 `{ "access_token":"...", "refresh_token":"...", "expires_in":3600, "employee":{"employee_id":123,"name":"山田 太郎","role":"EMPLOYEE"} }` | VALIDATION_ERROR(422) 未入力<br>UNAUTHORIZED(401) 認証情報誤り |
+| 1.1 ログイン | `POST /auth/login`（認証不要） | `{ "email":"yamada@example.co.jp", "password":"********" }` | 200 `{ "access_token":"...", "refresh_token":"...", "expires_in":3600, "employee":{"employee_id":123,"name":"山田 太郎","role":"EMPLOYEE"} }` | VALIDATION_ERROR(422) 未入力<br>UNAUTHORIZED(401) 認証情報誤り |
 | 1.2 トークン再発行 | `POST /auth/refresh`（認証不要） | `{ "refresh_token":"..." }` | 200 `{ "access_token":"...", "expires_in":3600 }`<br>※リフレッシュトークンはローテーションせず、有効期限（14日）まで同一のものを使い続ける。期限切れ後は再ログインが必要 | UNAUTHORIZED(401) リフレッシュトークン無効・失効 |
 | 1.3 ログアウト | `POST /auth/logout` | ヘッダーのみ（`Authorization: Bearer`）<br>※サーバ側のトークンテーブルから、アクセストークンとそれに紐づくリフレッシュトークンの両方を失効させる | 204 No Content | UNAUTHORIZED(401) 未ログイン状態 |
-| 1.4 アカウント作成 | `POST /accounts`（認証不要） | `{ "employee_code":"EMP00456", "email":"sato@example.co.jp", "password":"********" }`<br>※ログインIDは`employee_code`。`email`は連絡先・通知用で、ログインには使用しない | 201 `{ "data":{"employee_id":456} }`（`Location: /v1/employees/456`） | DUPLICATE_EMAIL(409)<br>DUPLICATE_EMPLOYEE_CODE(409) 既にアカウント作成済み<br>NOT_FOUND(404) 社員マスタに該当社員コードなし<br>VALIDATION_ERROR(422) パスワード強度不足等 |
+| 1.4 アカウント作成 | `POST /accounts`（認証不要） | `{ "employee_code":"EMP00456", "email":"sato@example.co.jp", "password":"********" }`<br>※`employee_code`と`email`の**両方**を社員マスタと照合して本人確認を行う。`email`はADMINが6.1で登録済みの値と一致する必要がある（本人が新規に決めることはできない）。このAPIで設定するのは**パスワードのみ** | 201 `{ "data":{"employee_id":456} }`（`Location: /v1/employees/456`） | DUPLICATE_EMPLOYEE_CODE(409) 既にアカウント作成済み<br>NOT_FOUND(404) 社員マスタに該当社員コードなし<br>VALIDATION_ERROR(422) メールアドレスが社員マスタと不一致／パスワード強度不足 |
 | 1.5 ログイン中の自分の情報取得 | `GET /me` | ヘッダーのみ | 200 `{ "data":{...} }`（3.1と同形式。`email`/`tel`を含む） | UNAUTHORIZED(401) |
 
 ---
