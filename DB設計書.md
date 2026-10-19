@@ -14,7 +14,7 @@
 | --- | --- |
 | 命名規則 | すべて snake_case。テーブル名は複数形（`employees`）、主キーは `<単数形>_id`（`employee_id`） |
 | 主キー | `BIGSERIAL`（自動採番）。中間テーブルのみ複合主キー |
-| 文字コード | UTF-8（`UTF8`）、照合順序は `ja-x-icu` |
+| 文字コード | UTF-8（`UTF8`）。照合順序は DB 全体ではなく `employees.name` / `employees.name_kana` にカラム単位で `COLLATE "ja-x-icu"` を指定する（決定事項5） |
 | 日時型 | `TIMESTAMPTZ`（タイムゾーン付き）。アプリ側では JST として扱う |
 | 日付型 | `DATE`（時刻を持たない項目） |
 | 共通カラム | 全テーブルに `created_at` / `updated_at` を持たせる（中間テーブル・ログ系を除く） |
@@ -77,8 +77,8 @@ erDiagram
 | --- | --- | --- | --- | --- |
 | `employee_id` | BIGSERIAL | × | 自動採番 | 主キー |
 | `employee_code` | VARCHAR(20) | × | | 社員番号（例 `EMP00123`）。アカウント作成時の本人確認に使う。UNIQUE |
-| `name` | VARCHAR(100) | × | | 氏名 |
-| `name_kana` | VARCHAR(100) | ○ | | 氏名カナ。かな検索用 |
+| `name` | VARCHAR(100) | × | | 氏名。`COLLATE "ja-x-icu"`（決定事項5） |
+| `name_kana` | VARCHAR(100) | ○ | | 氏名カナ。かな検索用。`COLLATE "ja-x-icu"`（決定事項5） |
 | `email` | VARCHAR(255) | × | | メールアドレス。**ログインID**。UNIQUE。ADMINが社員登録時に設定する。**機密項目**（本人・ADMINのみ閲覧可） |
 | `tel` | VARCHAR(20) | ○ | | 電話番号。**機密項目** |
 | `password_hash` | VARCHAR(255) | ○ | | BCrypt ハッシュ。アカウント未作成の間は NULL |
@@ -91,7 +91,7 @@ erDiagram
 | `employment_type_id` | BIGINT | × | | → `employment_types` |
 | `seat_id` | BIGINT | ○ | | → `seats`。**UNIQUE**（1座席に1人まで） |
 | `status` | SMALLINT | × | 1 | 0:退職・無効（論理削除） / 1:在籍 |
-| `role` | VARCHAR(20) | × | 'EMPLOYEE' | `EMPLOYEE` / `ADMIN` |
+| `role` | VARCHAR(20) | × | 'EMPLOYEE' | `EMPLOYEE` / `ADMIN`。**人事部および社長に `ADMIN` を付与する**（決定事項3） |
 | `created_at` | TIMESTAMPTZ | × | now() | |
 | `updated_at` | TIMESTAMPTZ | × | now() | |
 
@@ -352,14 +352,36 @@ API設計仕様書の「認証トークンの仕様」に対応。**opaque token
 
 ## 8. 権限テーブル
 
+> **前期スコープでは使用しない。** 権限制御は `employees.role`（`EMPLOYEE` / `ADMIN`）の2値で行う（決定事項3）。
+> テーブル自体は `V1__init.sql` で作成するが、初期データは投入せず空のままにする。後から使い始めるときにマイグレーションを追加しなくて済むようにしておくため。
+>
+> 以下 8.1 / 8.2 の内容は、**「閲覧はできるが編集はできない利用者」が必要になった場合の設計案**として残す。2026-10-19 時点では社長にも編集権限を与える判断になったため、該当者がいない。
+
 ### 8.1 permissions（権限マスタ）
 
 | カラム | 型 | NULL | 説明 |
 | --- | --- | --- | --- |
 | `permission_id` | BIGSERIAL | × | 主キー |
-| `permission_code` | VARCHAR(50) | × | 権限コード（`VIEW` など）。UNIQUE |
-| `permission_name` | VARCHAR(100) | × | 表示名（閲覧可能 など） |
+| `permission_code` | VARCHAR(50) | × | 権限コード。UNIQUE |
+| `permission_name` | VARCHAR(100) | × | 表示名 |
 | `created_at` / `updated_at` | TIMESTAMPTZ | × | |
+
+**権限コード一覧（設計案・前期では未投入）**
+
+API設計仕様書で「ADMIN専用」としている箇所を整理した結果、権限を使う場合は以下の4つで足りる。
+
+| permission_id | `permission_code` | `permission_name` | 対象API |
+| --- | --- | --- | --- |
+| 1 | `VIEW_PRIVATE` | 機密情報の閲覧 | 機密項目 `email` / `tel` の閲覧（API 3章）<br>退職者（`status=0`）の検索・閲覧（API 2.1）<br>CSVエクスポート（API 10.3） |
+| 2 | `MANAGE_EMPLOYEES` | 社員情報の管理 | 社員の登録・更新・削除（API 6.1〜6.3）<br>スキル・資格・プロジェクトの紐付け（API 6.4〜6.9）<br>CSVインポート（API 10.1, 10.2） |
+| 3 | `MANAGE_MASTERS` | マスタの管理 | マスタの登録・更新・削除（API 7.1〜7.9） |
+| 4 | `APPROVE_REQUESTS` | 変更申請の承認 | 変更申請の全件閲覧・承認・却下（API 9.2, 9.3） |
+
+> **この4コードを使う場合の `employees.role` との関係**：`role = 'ADMIN'` を「管理系3つ（`MANAGE_EMPLOYEES` / `MANAGE_MASTERS` / `APPROVE_REQUESTS`）のいずれかを持つ人」と定義すれば、API設計仕様書の各所にある「FORBIDDEN(403) ADMIN以外」はそのまま成立する。書き換えが必要になるのは `VIEW_PRIVATE` 側の4箇所（機密項目・`status=0` の2箇所・エクスポート）と、用語を説明する注記の計5箇所のみ。
+>
+> **権限管理API（API 7.10 / 7.11）自体は権限テーブルで制御せず、`role = 'ADMIN'` で制御する。** 権限を配る権限を権限テーブルで守ると循環し、自分に権限を付与できてしまうため。
+>
+> **前期では上記を適用しない。** `role` の2値がそのまま権限の実体であり、API設計仕様書の「ADMIN以外は403」は**全箇所そのままで正しい**。仕様書の修正は不要。
 
 ### 8.2 permission_assignments（権限付与）
 
@@ -376,7 +398,28 @@ API設計仕様書の「認証トークンの仕様」に対応。**opaque token
 - CHECK: `target_type IN ('DEPT','POSITION','EMPLOYEE')`
 
 > `target_id` は `target_type` によって参照先テーブルが変わるため、**外部キー制約を張れない**（ポリモーフィック関連）。整合性はアプリ側で担保する。
-> 権限が「部署単位」だけで足りるなら、`permission_assignments` に `department_id` の外部キーを直接持たせる設計に単純化できる。要検討。
+>
+> **この形を維持すると決定した。** 前期スコープでは権限付与API（API 7.11）の管理画面を実装せず、下記の初期データ5行を固定で流すだけなので、手入力による不正なIDの混入が起きない。`UNIQUE` と `CHECK` が1行で書けるシンプルさを取った。
+>
+> 7.11 を実装することになったら、`target_type` / `target_id` を `department_id` / `position_id` / `employee_id` の3列に分割し（CHECK でちょうど1つだけ NOT NULL）、それぞれに外部キーを張る設計に変更する。手入力のミスをDB側で弾けるようになり、管理画面に付与先の名称を表示するのも楽になるため。
+
+**付与の設計案（前期では未投入）**
+
+部署・役職に付与することで、年2回（4月・10月）の人事異動に権限が自動で追従する（異動した本人の権限を付け外しする運用が発生しない）。これが権限テーブルを使う最大の利点だが、前期では `role` を手で設定する運用とする。
+
+| permission | `target_type` | 付与先 | 備考 |
+| --- | --- | --- | --- |
+| 1 `VIEW_PRIVATE` | `DEPT` | 人事部 | |
+| 2 `MANAGE_EMPLOYEES` | `DEPT` | 人事部 | |
+| 3 `MANAGE_MASTERS` | `DEPT` | 人事部 | |
+| 4 `APPROVE_REQUESTS` | `DEPT` | 人事部 | |
+| 1 `VIEW_PRIVATE` | `POSITION` | 社長 | **閲覧のみ。** 社員情報の編集・マスタ管理・申請承認はできない |
+
+`target_id` には、シードで採番された `departments.department_id`（人事部）と `positions.position_id`（社長）が入る。
+
+> 社長を `POSITION` で付与するのは、代替わりしても新しい社長に権限が自動で移るため。個人（`EMPLOYEE`）に付けると、退任後も権限が残る。
+>
+> `DEPT` 付与は **人事部の全員**（アルバイト・新人を含む）が対象になる。「人事部の課長以上」のような絞り込みは今の設計では表現できないため、必要になった場合は該当者を `EMPLOYEE` で個別に付与して対応する。
 
 ---
 
@@ -403,6 +446,10 @@ API設計仕様書の「認証トークンの仕様」に対応。**opaque token
 | --- | --- | --- |
 | 1 | **ログインID** | **メールアドレス（`email`）**。`employee_code` はアカウント作成時の本人確認にのみ使う |
 | 2 | **email の登録者** | **ADMIN** が社員登録（API 6.1）時に設定する。本人はアカウント作成（API 1.4）時に照合のため送信するだけで、新規に決めることはできない。そのため `employees.email` は **NOT NULL** |
+| 3 | **権限制御の方式** | **`employees.role`（`EMPLOYEE` / `ADMIN`）の2値のみで行う。** `ADMIN` は**人事部と社長**に付与し、社長にも閲覧だけでなく編集を許可する（2026-10-19 チーム判断）。これにより「閲覧のみ」の利用者が存在しなくなるため、`permissions` / `permission_assignments` は前期では使用しない（テーブルは作成するが空。8章の注記を参照）。API設計仕様書の「FORBIDDEN(403) ADMIN以外」は全箇所そのまま有効で、**仕様書の修正は不要** |
+| 4 | **`permission_assignments` の形** | **`target_type` / `target_id` のポリモーフィック設計を維持する。** 前期では使用しないため作り替える理由がない。実際に使い始める際は 8.2 の注記にある列分割案を再検討する |
+| 5 | **照合順序の指定方法** | **カラム単位で `COLLATE "ja-x-icu"` を指定する**（対象は `employees.name` / `employees.name_kana`）。DB 全体に適用するには compose への `POSTGRES_INITDB_ARGS` 追加とボリュームの作り直しが必要で、チーム全員の環境に影響する。`ja-x-icu` はコンテナのデフォルト照合順序（`en_US.utf8`）のままでもカラム単位で利用できることを確認済みのため、氏名ソートが必要な2カラムのみに指定する |
+| 6 | **`role = 'ADMIN'` の付与範囲** | **人事部の全員**（＋社長）に付与する（2026-10-19 チーム判断）。`role` は社員ごとの手設定のため、異動時は付け外しが必要になる。年2回の異動で運用が重くなった場合は、8章の権限テーブル（部署・役職への付与で自動追従する）への移行を検討する |
 
 ---
 
@@ -411,6 +458,5 @@ API設計仕様書の「認証トークンの仕様」に対応。**opaque token
 | No | 内容 | 論点 |
 | --- | --- | --- |
 | 1 | `name_kana` の追加 | かな検索のために追加した。API設計仕様書には未記載なので、使うなら仕様書側にも追記が必要 |
-| 2 | 権限テーブルの要否 | `employees.role`（EMPLOYEE/ADMIN）だけで要件を満たせる可能性がある。`permissions` / `permission_assignments` は前期のスコープでは使わないかもしれない |
-| 3 | `import_jobs.errors` の JSONB | 別テーブルに分けるかどうか。今の要件なら JSONB で十分 |
-| 4 | 検索の部分一致 | `keyword` 検索を LIKE で済ませるか、`pg_trgm` 拡張を入れるか。800名程度なら LIKE で足りる見込み |
+| 2 | `import_jobs.errors` の JSONB | 別テーブルに分けるかどうか。今の要件なら JSONB で十分 |
+| 3 | 検索の部分一致 | `keyword` 検索を LIKE で済ませるか、`pg_trgm` 拡張を入れるか。800名程度なら LIKE で足りる見込み |
