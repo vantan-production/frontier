@@ -1,5 +1,6 @@
 package jp.co.frontier.ems.repository;
 
+import java.util.Optional;
 import jp.co.frontier.ems.entity.Employee;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -14,4 +15,10 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
  */
 public interface EmployeeRepository extends JpaRepository<Employee, Long>,
         JpaSpecificationExecutor<Employee> {
+
+    /** ログイン時にメールアドレスで引く（email はログインID）。 */
+    Optional<Employee> findByEmail(String email);
+
+    /** アカウント作成時の本人確認で社員番号から引く。 */
+    Optional<Employee> findByEmployeeCode(String employeeCode);
 }
