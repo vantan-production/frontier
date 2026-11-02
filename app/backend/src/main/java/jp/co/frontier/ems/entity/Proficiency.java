@@ -1,5 +1,8 @@
 package jp.co.frontier.ems.entity;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
+
 /**
  * スキルの習熟度。employee_skills.proficiency（SMALLINT）に対応する。
  */
@@ -20,10 +23,17 @@ public enum Proficiency {
         this.code = code;
     }
 
+    /**
+     * JSONでは区分値そのもの（数値）として表現する。
+     * API設計仕様書が employee_skills.proficiency を数値で返す形になっているため。
+     * 付けないと enum 名（"ACTIVE" など）で出力されてしまう。
+     */
+    @JsonValue
     public short getCode() {
         return code;
     }
 
+    @JsonCreator
     public static Proficiency fromCode(short code) {
         for (Proficiency value : values()) {
             if (value.code == code) {

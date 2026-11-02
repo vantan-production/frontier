@@ -19,7 +19,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * Spring Security の設定。
  *
  * <p><b>認証の適用範囲は段階的に広げている。</b> 現在トークンが必須なのは
- * {@code POST /v1/auth/logout} のみで、それ以外は認証なしでも通る。
+ * {@code POST /v1/auth/logout} と {@code /v1/me} 配下のみで、それ以外は
+ * 認証なしでも通る。
  * 仕様書では「認証不要なのは login / refresh / accounts の3本のみ」だが、
  * 一気に切り替えるとフロント側のログイン実装が終わるまで画面が何も表示できなくなるため、
  * 並行して作業できるようこの形にしている。
@@ -59,6 +60,9 @@ public class SecurityConfig {
                         // 失効対象のトークンを特定する必要があるので認証必須
                         .requestMatchers(HttpMethod.POST,
                                 ApiPaths.V1 + "/auth/logout").authenticated()
+                        // 本人限定のエンドポイント。誰が本人なのかが決まらないと動かない
+                        .requestMatchers(ApiPaths.V1 + "/me", ApiPaths.V1 + "/me/**")
+                                .authenticated()
                         // TODO: フロントのログイン実装後 authenticated() に変更する
                         .anyRequest().permitAll())
                 // 認可の判定より前にトークンを検証する必要があるため、
