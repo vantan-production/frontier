@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -28,9 +29,17 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * <p><b>TODO: フロント側のログイン実装が完了したら、{@code anyRequest()} を
  * {@code permitAll()} から {@code authenticated()} に変更する。</b>
  * 切り替え後は認証不要の3本以外すべてにトークンが必要になる。
+ *
+ * <p><b>ADMIN 限定の操作はここに書かない。</b> {@code @EnableMethodSecurity} を
+ * 有効にしているので、サービスやコントローラのメソッドに
+ * {@code @PreAuthorize("hasRole('ADMIN')")} を付けて表現する。
+ * API 7章が「参照は全社員・書込はADMIN」という構造のため、パスで並べると
+ * マスタ9種×3メソッドで条件が30行近くになり、かつ条件が実装から離れて
+ * 見落としやすくなる。権限は処理のすぐ隣に書く方針とした。
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
