@@ -1,6 +1,7 @@
 package jp.co.frontier.ems.common.error;
 
 import java.util.List;
+import tools.jackson.databind.PropertyNamingStrategies;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -38,6 +39,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /**
+     * JSONのキー名への変換に使う。
+     * application.properties の property-naming-strategy と同じ規則。
+     *
+     * <p>Jackson の {@code translate} は protected なので、呼び出せるように
+     * 薄いサブクラスで公開している。自前で正規表現を書くより、
+     * 実際のシリアライズと同じ実装を使う方が確実。
+     */
+    private static final SnakeCaseTranslator SNAKE_CASE = new SnakeCaseTranslator();
+
+    private static final class SnakeCaseTranslator
+            extends PropertyNamingStrategies.SnakeCaseStrategy {
+
+        String toSnakeCase(String name) {
+            return translate(name);
+        }
+    }
+
     /** 業務上の想定内エラー（サービス層が投げる）。 */
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> handleApiException(ApiException e) {
@@ -52,6 +71,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * リクエストボディのバリデーション違反（{@code @Valid} が検出）。
      *
      * <p>項目ごとの理由を details に詰めて返すため、基底クラスの実装を上書きする。
+     *
+     * <p>{@code field} は JSON 上のキー名（snake_case）に変換して返す。
+     * Bean Validation が返すのは Java のフィールド名（{@code newPassword}）だが、
+     * このAPIのJSONは snake_case（{@code new_password}）なので、変換しないと
+     * クライアントがエラーを項目に対応づけられない。
      */
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
@@ -59,7 +83,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpStatusCode status, WebRequest request) {
 
         List<ErrorResponse.ErrorDetail> details = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> new ErrorResponse.ErrorDetail(fe.getField(), fe.getDefaultMessage()))
+                .map(fe -> new ErrorResponse.ErrorDetail(
+                        toJsonFieldName(fe.getField()), fe.getDefaultMessage()))
                 .toList();
 
         ErrorCode code = ErrorCode.VALIDATION_ERROR;
@@ -116,5 +141,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         log.error("想定外のエラー", e);
         return ResponseEntity.status(code.getStatus())
                 .body(ErrorResponse.of(code, code.getDefaultMessage(), null));
+    }
+
+    /**
+     * Java のフィールド名を JSON のキー名（snake_case）に変換する。
+     *
+     * <p>自前で正規表現を書くのではなく Jackson の変換規則をそのまま使う。
+     * 実際のシリアライズに使われるものと同じロジックなので、連続した大文字や
+     * 数字を含む名前でもレスポンス本体のキーとずれない。
+     */
+    private String toJsonFieldName(String javaFieldName) {
+        return SNAKE_CASE.toSnakeCase(javaFieldName);
     }
 }

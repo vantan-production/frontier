@@ -112,6 +112,7 @@ JWT のようにトークン自体へ情報を埋め込むのではなく、**�
 | 1.3 ログアウト | `POST /auth/logout` | ヘッダーのみ（`Authorization: Bearer`）<br>※サーバ側のトークンテーブルから、アクセストークンとそれに紐づくリフレッシュトークンの両方を失効させる | 204 No Content | UNAUTHORIZED(401) 未ログイン状態 |
 | 1.4 アカウント作成 | `POST /accounts`（認証不要） | `{ "employee_code":"EMP00456", "email":"sato@example.co.jp", "password":"********" }`<br>※`employee_code`と`email`の**両方**を社員マスタと照合して本人確認を行う。`email`はADMINが6.1で登録済みの値と一致する必要がある（本人が新規に決めることはできない）。このAPIで設定するのは**パスワードのみ** | 201 `{ "data":{"employee_id":456} }`（`Location: /v1/employees/456`） | DUPLICATE_EMPLOYEE_CODE(409) 既にアカウント作成済み<br>NOT_FOUND(404) 社員マスタに該当社員コードなし<br>VALIDATION_ERROR(422) メールアドレスが社員マスタと不一致／パスワード強度不足 |
 | 1.5 ログイン中の自分の情報取得 | `GET /me` | ヘッダーのみ | 200 `{ "data":{...} }`（3.1と同形式。`email`/`tel`を含む） | UNAUTHORIZED(401) |
+| 1.6 パスワード変更 | `PATCH /me/password` | `{ "current_password":"********", "new_password":"********" }`<br>※現在のパスワードの照合を必須とする。トークンを盗まれた場合に、本人のパスワードを勝手に書き換えられないようにするため<br>※`new_password` の強度条件は 1.4 と同じ（8文字以上72文字以下・英字と数字を含む） | 204 No Content<br>※**変更後、その社員の全トークンを失効させる**。他端末に残ったセッションを無効化するため、変更した端末も含めて再ログインが必要になる | VALIDATION_ERROR(422) 現在のパスワードが不一致／新パスワードの強度不足／現在と同じパスワード<br>UNAUTHORIZED(401) 未ログイン |
 
 ---
 

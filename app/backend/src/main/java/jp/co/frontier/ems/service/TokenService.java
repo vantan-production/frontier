@@ -140,6 +140,19 @@ public class TokenService {
         }
     }
 
+    /**
+     * 指定社員の有効なトークンをすべて失効させる。
+     *
+     * <p>パスワード変更（API 1.6）と社員の論理削除（API 6.3）から呼ぶ。
+     * 実行後、その社員は全端末で再ログインが必要になる。
+     *
+     * @return 失効させた件数
+     */
+    @Transactional
+    public int revokeAllForEmployee(Long employeeId) {
+        return authTokenRepository.revokeAllByEmployeeId(employeeId, OffsetDateTime.now());
+    }
+
     /** SHA-256 ハッシュを16進64文字で返す（auth_tokens.token_hash は VARCHAR(64)）。 */
     private String hash(String raw) {
         try {

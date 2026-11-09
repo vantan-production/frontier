@@ -3,12 +3,18 @@ package jp.co.frontier.ems.controller;
 import jp.co.frontier.ems.common.ApiPaths;
 import jp.co.frontier.ems.common.ApiResponse;
 import jp.co.frontier.ems.common.error.ApiException;
+import jakarta.validation.Valid;
 import jp.co.frontier.ems.dto.EmployeeDetailResponse;
+import jp.co.frontier.ems.dto.PasswordChangeRequest;
 import jp.co.frontier.ems.security.AuthenticatedEmployee;
+import jp.co.frontier.ems.service.AccountService;
 import jp.co.frontier.ems.service.EmployeeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeController {
 
     private final EmployeeService employeeService;
+    private final AccountService accountService;
 
     /** GET /v1/me — ログイン中の自分の情報を取得する（API 1.5）。 */
     @GetMapping
@@ -35,5 +42,23 @@ public class MeController {
             throw ApiException.unauthorized("ログインしていません");
         }
         return ApiResponse.of(employeeService.findMe(viewer));
+    }
+
+    /**
+     * PATCH /v1/me/password — パスワードを変更する（API 1.6）。
+     *
+     * <p>成功すると全トークンが失効するため、クライアントは 204 を受けたら
+     * ログイン画面へ戻す必要がある。現在使っているトークンもこの時点で無効。
+     */
+    @PatchMapping("/password")
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal AuthenticatedEmployee viewer,
+            @Valid @RequestBody PasswordChangeRequest request) {
+
+        if (viewer == null) {
+            throw ApiException.unauthorized("ログインしていません");
+        }
+        accountService.changePassword(viewer.employeeId(), request);
+        return ResponseEntity.noContent().build();
     }
 }

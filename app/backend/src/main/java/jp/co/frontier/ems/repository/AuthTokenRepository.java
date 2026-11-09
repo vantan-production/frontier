@@ -39,4 +39,26 @@ public interface AuthTokenRepository extends JpaRepository<AuthToken, Long> {
     @Modifying
     @Query("delete from AuthToken t where t.expiresAt < :threshold")
     int deleteExpiredBefore(@Param("threshold") OffsetDateTime threshold);
+
+    /**
+     * 指定社員の有効なトークンをすべて失効させる。
+     *
+     * <p>用途は2つ。
+     * <ul>
+     *   <li>パスワード変更時（API 1.6）— 他端末に残ったセッションを無効化する</li>
+     *   <li>社員の論理削除時（API 6.3）— 退職者のトークンを残さない</li>
+     * </ul>
+     *
+     * <p>物理削除ではなく {@code revoked_at} を入れる。いつ失効したかを
+     * 追えるようにするため。レコード自体は
+     * {@link jp.co.frontier.ems.service.AuthTokenCleanupService} が
+     * 期限到来後にまとめて消す。
+     *
+     * @return 失効させた件数
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("update AuthToken t set t.revokedAt = :now "
+            + "where t.employee.employeeId = :employeeId and t.revokedAt is null")
+    int revokeAllByEmployeeId(@Param("employeeId") Long employeeId,
+                              @Param("now") OffsetDateTime now);
 }
