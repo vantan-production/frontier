@@ -36,7 +36,7 @@ public interface AuthTokenRepository extends JpaRepository<AuthToken, Long> {
      * @param threshold この時刻より前に期限切れになったものを削除する
      * @return 削除件数
      */
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("delete from AuthToken t where t.expiresAt < :threshold")
     int deleteExpiredBefore(@Param("threshold") OffsetDateTime threshold);
 
@@ -54,9 +54,14 @@ public interface AuthTokenRepository extends JpaRepository<AuthToken, Long> {
      * {@link jp.co.frontier.ems.service.AuthTokenCleanupService} が
      * 期限到来後にまとめて消す。
      *
+     * <p>{@code clearAutomatically} を有効にしているのは、一括UPDATEが
+     * 永続化コンテキスト上のエンティティを更新しないため。付けないと、
+     * 同一トランザクション内でトークンを読み直したときに失効前の状態が
+     * 見えてしまう（失効させたはずのトークンが有効と判定される）。
+     *
      * @return 失効させた件数
      */
-    @Modifying(flushAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update AuthToken t set t.revokedAt = :now "
             + "where t.employee.employeeId = :employeeId and t.revokedAt is null")
     int revokeAllByEmployeeId(@Param("employeeId") Long employeeId,
