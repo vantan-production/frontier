@@ -48,4 +48,32 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>,
      */
     @EntityGraph(attributePaths = {"department", "position"})
     List<Employee> findBySeatSeatIdIn(Collection<Long> seatIds);
+
+    /** 社員番号の重複チェック（API 6.1）。 */
+    boolean existsByEmployeeCode(String employeeCode);
+
+    /** メールアドレスの重複チェック（API 6.1）。 */
+    boolean existsByEmail(String email);
+
+    /** 更新時の重複チェック（API 6.2）。自分自身は除外する。 */
+    boolean existsByEmployeeCodeAndEmployeeIdNot(String employeeCode, Long employeeId);
+
+    boolean existsByEmailAndEmployeeIdNot(String email, Long employeeId);
+
+    /**
+     * 指定座席に着席している社員を取得する。座席の二重割当の判定に使う。
+     *
+     * <p>DBにも UNIQUE 制約があるが、制約違反の例外をそのまま返すと
+     * 500 になってしまうため、事前に確認して 409 を返す。
+     */
+    Optional<Employee> findBySeatSeatId(Long seatId);
+
+    /** 指定部署に所属する社員がいるか（マスタ削除の可否判定）。 */
+    boolean existsByDepartmentDepartmentId(Long departmentId);
+
+    /** 指定役職の社員がいるか（マスタ削除の可否判定）。 */
+    boolean existsByPositionPositionId(Long positionId);
+
+    /** 指定雇用形態の社員がいるか（マスタ削除の可否判定）。 */
+    boolean existsByEmploymentTypeEmploymentTypeId(Long employmentTypeId);
 }

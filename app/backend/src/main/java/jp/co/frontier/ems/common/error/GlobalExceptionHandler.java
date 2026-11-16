@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -65,6 +66,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         log.info("業務エラー: code={} message={}", code.name(), e.getMessage());
         return ResponseEntity.status(code.getStatus())
                 .body(ErrorResponse.of(code, e.getMessage(), e.getDetails()));
+    }
+
+    /**
+     * 権限不足（{@code @PreAuthorize} が拒否）。
+     *
+     * <p>これを個別に受けないと、下の {@code Exception} ハンドラに流れて
+     * <b>権限エラーが 500 として報告される</b>。{@code @ExceptionHandler} は
+     * Spring Security の例外変換フィルタより手前で処理されるため、
+     * Security 側の既定の403にはならない。
+     *
+     * <p>{@code AuthorizationDeniedException} は
+     * {@code AccessDeniedException} の派生なので、こちらで両方受けられる。
+     *
+     * <p>未認証でも 403 を返す。「ログインすれば通るのか、権限が足りないのか」を
+     * 区別して返すと、ADMIN専用エンドポイントの存在を手がかりにされるため。
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
+        ErrorCode code = ErrorCode.FORBIDDEN;
+        log.info("権限不足: {}", e.getMessage());
+        return ResponseEntity.status(code.getStatus())
+                .body(ErrorResponse.of(code, code.getDefaultMessage(), null));
     }
 
     /**

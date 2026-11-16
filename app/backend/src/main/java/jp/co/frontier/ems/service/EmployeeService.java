@@ -35,6 +35,7 @@ public class EmployeeService {
     private final EmployeeSkillRepository employeeSkillRepository;
     private final EmployeeCertificationRepository employeeCertificationRepository;
     private final EmployeeProjectRepository employeeProjectRepository;
+    private final TokenService tokenService;
 
     /**
      * 社員詳細を取得する（API 3.1）。
@@ -73,6 +74,33 @@ public class EmployeeService {
                         "ログイン中の社員が見つかりません。再度ログインしてください"));
 
         return buildDetail(employee, true);
+    }
+
+    /**
+     * 社員詳細を ADMIN として取得する。
+     *
+     * <p>登録・更新（API 6.1 / 6.2）のレスポンスに使う。実行者が ADMIN で
+     * あることは呼び出し側（{@link EmployeeAdminService}）で担保されているため、
+     * 機密項目を含めて返す。
+     */
+    @Transactional(readOnly = true)
+    public EmployeeDetailResponse findDetailAsAdmin(Long employeeId) {
+        Employee employee = employeeRepository.findWithMastersByEmployeeId(employeeId)
+                .orElseThrow(() -> ApiException.notFound("指定された社員が見つかりません"));
+
+        return buildDetail(employee, true);
+    }
+
+    /**
+     * 指定社員のトークンをすべて失効させる。
+     *
+     * <p>社員の論理削除（API 6.3）から呼ぶ。退職者のトークンは検証時に
+     * 在籍状態を見て弾かれるので穴は無いが、使えそうに見えるレコードを
+     * 残さないため能動的に失効させる。
+     */
+    @Transactional
+    public void revokeTokensOf(Long employeeId) {
+        tokenService.revokeAllForEmployee(employeeId);
     }
 
     /**
