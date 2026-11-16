@@ -2,6 +2,7 @@ package jp.co.frontier.ems.config;
 
 import jp.co.frontier.ems.dto.EmployeeSearchCriteria;
 import jp.co.frontier.ems.dto.ThanksMessageDtos;
+import jp.co.frontier.ems.entity.ChangeRequestStatus;
 import jp.co.frontier.ems.entity.EmployeeStatus;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -24,6 +25,20 @@ public class WebConversionConfig implements WebMvcConfigurer {
         registry.addConverter(new StatusConverter());
         registry.addConverter(new MatchModeConverter());
         registry.addConverter(new HistoryTypeConverter());
+        registry.addConverter(new ChangeRequestStatusConverter());
+    }
+
+    /** {@code status=0} / {@code 1} / {@code 2} を変更申請の状態に変換する（API 9.2）。 */
+    static class ChangeRequestStatusConverter
+            implements Converter<String, ChangeRequestStatus> {
+
+        @Override
+        public ChangeRequestStatus convert(String source) {
+            if (source == null || source.isBlank()) {
+                return null;
+            }
+            return ChangeRequestStatus.fromCode(Short.parseShort(source.trim()));
+        }
     }
 
     /**
