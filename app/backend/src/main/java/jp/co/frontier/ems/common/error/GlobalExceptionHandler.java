@@ -143,9 +143,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /**
      * Spring MVC の標準例外すべてが最後に通る変換点。
      *
-     * <p>ステータスは基底クラスが決めたものを尊重し、本文だけ共通形式に差し替える。
-     * 仕様書のコード表に対応するコードがあればそれを使い、無ければ
+     * <p>仕様書のコード表に対応するコードがあればそれを使い、無ければ
      * HTTPステータス名を code として返す（405、415 など）。
+     *
+     * <p><b>対応するコードが見つかった場合は、ステータスもそのコードのものに
+     * 揃える。</b> 基底クラスが決めたステータスをそのまま使うと、
+     * 本文の code と実際のステータスが食い違う。たとえばクエリパラメータの
+     * 型不正は基底クラスでは 400 になるが、仕様書は入力値の誤りを
+     * VALIDATION_ERROR(422) と定めており、「code は VALIDATION_ERROR なのに
+     * ステータスは 400」という状態になってしまう。
+     * クライアントがどちらを見ても同じ判断ができるようにする。
      */
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
@@ -153,27 +160,31 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpStatusCode statusCode, WebRequest request) {
 
         ErrorCode mapped = switch (statusCode.value()) {
-            case 400 -> ErrorCode.VALIDATION_ERROR;
+            // 400（型不正・JSONの構文エラーなど）は仕様書では入力値の誤り扱い
+            case 400, 422 -> ErrorCode.VALIDATION_ERROR;
             case 401 -> ErrorCode.UNAUTHORIZED;
             case 403 -> ErrorCode.FORBIDDEN;
             case 404 -> ErrorCode.NOT_FOUND;
             case 409 -> ErrorCode.CONFLICT;
-            case 422 -> ErrorCode.VALIDATION_ERROR;
             case 500 -> ErrorCode.INTERNAL_SERVER_ERROR;
             default -> null;
         };
 
-        Object newBody;
         if (mapped != null) {
-            log.info("MVCエラー: status={} -> code={}", statusCode.value(), mapped.name());
-            newBody = ErrorResponse.of(mapped, mapped.getDefaultMessage(), null);
-        } else {
-            String rawCode = HttpStatus.valueOf(statusCode.value()).name();
-            log.info("MVCエラー: status={} code={}", statusCode.value(), rawCode);
-            newBody = ErrorResponse.ofRawCode(rawCode, ex.getMessage());
+            log.info("MVCエラー: status={} -> {}({})",
+                    statusCode.value(), mapped.name(), mapped.getStatus().value());
+            return super.handleExceptionInternal(ex,
+                    ErrorResponse.of(mapped, mapped.getDefaultMessage(), null),
+                    headers, mapped.getStatus(), request);
         }
 
-        return super.handleExceptionInternal(ex, newBody, headers, statusCode, request);
+        // 仕様書のコード表に無いプロトコルレベルのエラー（405、415 など）は
+        // ステータスをそのまま返す
+        String rawCode = HttpStatus.valueOf(statusCode.value()).name();
+        log.info("MVCエラー: status={} code={}", statusCode.value(), rawCode);
+        return super.handleExceptionInternal(ex,
+                ErrorResponse.ofRawCode(rawCode, ex.getMessage()),
+                headers, statusCode, request);
     }
 
     /**

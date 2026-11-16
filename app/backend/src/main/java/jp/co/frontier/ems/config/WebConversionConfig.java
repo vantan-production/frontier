@@ -1,6 +1,7 @@
 package jp.co.frontier.ems.config;
 
 import jp.co.frontier.ems.dto.EmployeeSearchCriteria;
+import jp.co.frontier.ems.dto.ThanksMessageDtos;
 import jp.co.frontier.ems.entity.EmployeeStatus;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -22,6 +23,7 @@ public class WebConversionConfig implements WebMvcConfigurer {
     public void addFormatters(FormatterRegistry registry) {
         registry.addConverter(new StatusConverter());
         registry.addConverter(new MatchModeConverter());
+        registry.addConverter(new HistoryTypeConverter());
     }
 
     /**
@@ -55,6 +57,23 @@ public class WebConversionConfig implements WebMvcConfigurer {
                 return null;
             }
             return EmployeeSearchCriteria.MatchMode.valueOf(source.trim().toUpperCase());
+        }
+    }
+
+    /**
+     * {@code type=sent} のように小文字で来るものを受け取る（API 8.3）。
+     *
+     * <p>不正な値は 422 にしたいので、変換できない場合は例外にする。
+     */
+    static class HistoryTypeConverter
+            implements Converter<String, ThanksMessageDtos.HistoryType> {
+
+        @Override
+        public ThanksMessageDtos.HistoryType convert(String source) {
+            if (source == null || source.isBlank()) {
+                return null;
+            }
+            return ThanksMessageDtos.HistoryType.valueOf(source.trim().toUpperCase());
         }
     }
 }
