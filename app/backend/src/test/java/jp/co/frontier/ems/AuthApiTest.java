@@ -85,7 +85,7 @@ class AuthApiTest extends ApiTestBase {
                             .content("""
                                     {"password":"x"}
                                     """))
-                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(status().isUnprocessableContent())
                     .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
                     .andExpect(jsonPath("$.error.details[0].field").value("email"));
         }

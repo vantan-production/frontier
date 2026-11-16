@@ -6,6 +6,7 @@ import jp.co.frontier.ems.common.error.ApiException;
 import jakarta.validation.Valid;
 import jp.co.frontier.ems.dto.EmployeeDetailResponse;
 import jp.co.frontier.ems.dto.PasswordChangeRequest;
+import jp.co.frontier.ems.dto.ProfileUpdateRequest;
 import jp.co.frontier.ems.security.AuthenticatedEmployee;
 import jp.co.frontier.ems.service.AccountService;
 import jp.co.frontier.ems.service.EmployeeService;
@@ -60,5 +61,25 @@ public class MeController {
         }
         accountService.changePassword(viewer.employeeId(), request);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * PATCH /v1/me/profile — 趣味・自己PRを更新する（API 5.1）。
+     *
+     * <p>指定した項目だけ更新する。編集できるのは趣味と自己PRのみで、
+     * それ以外の基本情報は変更申請（API 9章）を通す。
+     *
+     * <p>レスポンスは更新後の社員情報（API 3.1 と同形式）。本人の操作なので
+     * 機密項目を含む。
+     */
+    @PatchMapping("/profile")
+    public ApiResponse<EmployeeDetailResponse> updateProfile(
+            @AuthenticationPrincipal AuthenticatedEmployee viewer,
+            @Valid @RequestBody ProfileUpdateRequest request) {
+
+        if (viewer == null) {
+            throw ApiException.unauthorized("ログインしていません");
+        }
+        return ApiResponse.of(employeeService.updateMyProfile(viewer, request));
     }
 }

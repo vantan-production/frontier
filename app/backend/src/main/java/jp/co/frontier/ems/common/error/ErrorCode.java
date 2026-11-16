@@ -10,8 +10,14 @@ import org.springframework.http.HttpStatus;
  */
 public enum ErrorCode {
 
-    /** 入力値が不正。details に該当項目を入れる */
-    VALIDATION_ERROR(HttpStatus.UNPROCESSABLE_ENTITY, "入力値に誤りがあります"),
+    /**
+     * 入力値が不正。details に該当項目を入れる。
+     *
+     * <p>422 は RFC 9110 で "Unprocessable Content" に改称され、Spring 7 では
+     * 旧名の {@code UNPROCESSABLE_ENTITY} が非推奨になっている。ステータス番号は
+     * 同じ422なので、APIの挙動は変わらない。
+     */
+    VALIDATION_ERROR(HttpStatus.UNPROCESSABLE_CONTENT, "入力値に誤りがあります"),
 
     /** メールアドレス重複 */
     DUPLICATE_EMAIL(HttpStatus.CONFLICT, "このメールアドレスは既に登録されています"),

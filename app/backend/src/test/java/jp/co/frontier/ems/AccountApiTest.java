@@ -71,7 +71,7 @@ class AccountApiTest extends ApiTestBase {
         @DisplayName("作成済みの社員でもメール不一致なら422（アカウントの有無を伏せる）")
         void 本人確認が先に行われる() throws Exception {
             mockMvc.perform(create(作成済みの社員番号, "wrong@frontier.example.co.jp", 新パスワード))
-                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(status().isUnprocessableContent())
                     .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
         }
 
@@ -95,7 +95,7 @@ class AccountApiTest extends ApiTestBase {
         @DisplayName("パスワードに数字が無いと422で、項目名はsnake_case")
         void 強度不足_数字なし() throws Exception {
             mockMvc.perform(create(未作成の社員番号, 未作成のメール, "onlyletters"))
-                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(status().isUnprocessableContent())
                     .andExpect(jsonPath("$.error.details[0].field").value("password"));
         }
 
@@ -103,7 +103,7 @@ class AccountApiTest extends ApiTestBase {
         @DisplayName("パスワードが8文字未満だと422")
         void 強度不足_短い() throws Exception {
             mockMvc.perform(create(未作成の社員番号, 未作成のメール, "Ab1"))
-                    .andExpect(status().isUnprocessableEntity());
+                    .andExpect(status().isUnprocessableContent());
         }
 
         private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder create(
@@ -172,7 +172,7 @@ class AccountApiTest extends ApiTestBase {
             String token = loginAndGetAccessToken(対象のメール);
 
             mockMvc.perform(change(token, "WrongPassword1", 新パスワード))
-                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(status().isUnprocessableContent())
                     .andExpect(jsonPath("$.error.details[0].field").value("current_password"));
         }
 
@@ -182,7 +182,7 @@ class AccountApiTest extends ApiTestBase {
             String token = loginAndGetAccessToken(対象のメール);
 
             mockMvc.perform(change(token, SEED_PASSWORD, SEED_PASSWORD))
-                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(status().isUnprocessableContent())
                     .andExpect(jsonPath("$.error.details[0].field").value("new_password"));
         }
 
@@ -192,7 +192,7 @@ class AccountApiTest extends ApiTestBase {
             String token = loginAndGetAccessToken(対象のメール);
 
             mockMvc.perform(change(token, SEED_PASSWORD, "onlyletters"))
-                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(status().isUnprocessableContent())
                     .andExpect(jsonPath("$.error.details[0].field").value("new_password"));
         }
 

@@ -2,6 +2,7 @@ package jp.co.frontier.ems.service;
 
 import jp.co.frontier.ems.common.error.ApiException;
 import jp.co.frontier.ems.dto.EmployeeDetailResponse;
+import jp.co.frontier.ems.dto.ProfileUpdateRequest;
 import jp.co.frontier.ems.entity.Employee;
 import jp.co.frontier.ems.entity.EmployeeStatus;
 import jp.co.frontier.ems.repository.EmployeeCertificationRepository;
@@ -59,6 +60,35 @@ public class EmployeeService {
                 .orElseThrow(() -> ApiException.unauthorized(
                         "ログイン中の社員が見つかりません。再度ログインしてください"));
 
+        return buildDetail(employee, true);
+    }
+
+    /**
+     * 自己プロフィールの更新（API 5.1）。
+     *
+     * <p>指定された項目だけを更新する。JSON に項目が無い場合と null を明示した
+     * 場合は Jackson 上で区別できないため、どちらも「更新しない」として扱う。
+     * 値を消したい場合は空文字を送ってもらう。
+     *
+     * <p>編集できるのは趣味と自己PRのみ。それ以外の基本情報は変更申請
+     * （API 9章）を通す必要があるため、ここでは触らない。
+     */
+    @Transactional
+    public EmployeeDetailResponse updateMyProfile(
+            AuthenticatedEmployee viewer, ProfileUpdateRequest request) {
+
+        Employee employee = employeeRepository.findWithMastersByEmployeeId(viewer.employeeId())
+                .orElseThrow(() -> ApiException.unauthorized(
+                        "ログイン中の社員が見つかりません。再度ログインしてください"));
+
+        if (request.hobby() != null) {
+            employee.setHobby(request.hobby());
+        }
+        if (request.selfPr() != null) {
+            employee.setSelfPr(request.selfPr());
+        }
+
+        // 本人の操作なので機密項目を含めて返す
         return buildDetail(employee, true);
     }
 
