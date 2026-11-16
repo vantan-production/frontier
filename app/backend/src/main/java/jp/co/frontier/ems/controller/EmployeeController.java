@@ -3,8 +3,10 @@ package jp.co.frontier.ems.controller;
 import jp.co.frontier.ems.common.ApiPaths;
 import jp.co.frontier.ems.common.ApiResponse;
 import jp.co.frontier.ems.dto.EmployeeDetailResponse;
+import jp.co.frontier.ems.dto.SeatResponse;
 import jp.co.frontier.ems.security.AuthenticatedEmployee;
 import jp.co.frontier.ems.service.EmployeeService;
+import jp.co.frontier.ems.service.FloorMapService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,13 +14,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 社員。API 2. 社員検索 / 3. 社員詳細 / 6. 社員CRUD に対応する。 */
+/** 社員。API 2. 社員検索 / 3. 社員詳細 / 4.4 座席取得 / 6. 社員CRUD に対応する。 */
 @RestController
 @RequestMapping(ApiPaths.V1 + "/employees")
 @RequiredArgsConstructor
 public class EmployeeController {
 
     private final EmployeeService employeeService;
+    private final FloorMapService floorMapService;
 
     /**
      * GET /v1/employees/{employee_id} — 社員詳細を取得する（API 3.1）。
@@ -32,5 +35,16 @@ public class EmployeeController {
             @AuthenticationPrincipal AuthenticatedEmployee viewer) {
 
         return ApiResponse.of(employeeService.findDetail(employeeId, viewer));
+    }
+
+    /**
+     * GET /v1/employees/{employee_id}/seat — 社員の座席を取得する（API 4.4）。
+     *
+     * <p>座席未登録の社員は 200 で {@code "data": null} を返す。
+     * 404 になるのは社員自体が存在しない場合のみ（仕様書 4.4）。
+     */
+    @GetMapping("/{employee_id}/seat")
+    public ApiResponse<SeatResponse> seat(@PathVariable("employee_id") Long employeeId) {
+        return ApiResponse.of(floorMapService.findSeatByEmployee(employeeId));
     }
 }

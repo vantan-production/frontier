@@ -1,5 +1,7 @@
 package jp.co.frontier.ems.repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import jp.co.frontier.ems.entity.Employee;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -34,4 +36,16 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>,
     @EntityGraph(attributePaths = {
             "department", "position", "employmentType", "seat", "seat.floor", "seat.floor.site"})
     Optional<Employee> findWithMastersByEmployeeId(Long employeeId);
+
+    /**
+     * 指定座席に在席している社員を取得する（API 4.3）。
+     *
+     * <p>在席の判定は employees.seat_id 側で行う（seats に在席フラグは持たない）。
+     * 退職者は seat_id を NULL にするため、在籍者だけが引ける。
+     *
+     * <p>座席IDをまとめて渡すのは、フロアの座席ごとに問い合わせると
+     * 座席数ぶんクエリが飛ぶため（N+1）。
+     */
+    @EntityGraph(attributePaths = {"department", "position"})
+    List<Employee> findBySeatSeatIdIn(Collection<Long> seatIds);
 }

@@ -11,12 +11,20 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * <pre>
  * 単体 : { "data": { ... } }
  * 一覧 : { "data": [ ... ], "meta": { "page":1, "per_page":20, ... } }
+ * 該当なし : { "data": null }
  * </pre>
  *
- * <p>{@code meta} が null のときはキーごと省略される。
+ * <p>{@code @JsonInclude} を {@code meta} だけに付けているのは、
+ * レコード全体に付けると {@code data} が null のときにキーごと消えてしまうため。
+ * API 4.4（社員の座席取得）は「座席未登録の社員は 200 で {@code "data": null}」と
+ * 定めており、<b>キーの不在と null は区別される</b>。
  */
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public record ApiResponse<T>(T data, PageMeta meta) {
+public record ApiResponse<T>(
+        T data,
+
+        /** ページネーション情報。一覧以外では null になり、キーごと省略される */
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        PageMeta meta) {
 
     /** ページネーションを伴わないレスポンス。 */
     public static <T> ApiResponse<T> of(T data) {

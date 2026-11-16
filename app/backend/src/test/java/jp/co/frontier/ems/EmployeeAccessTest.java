@@ -144,8 +144,8 @@ class EmployeeAccessTest extends ApiTestBase {
         void 座席の入れ子() throws Exception {
             mockMvc.perform(get(詳細(他人の社員番号)))
                     .andExpect(jsonPath("$.data.seat.seat_number").value("2F-B01"))
-                    .andExpect(jsonPath("$.data.seat.floor_name").value("2階"))
-                    .andExpect(jsonPath("$.data.seat.site_name").value("本社"));
+                    .andExpect(jsonPath("$.data.seat.floor.floor_name").value("2階"))
+                    .andExpect(jsonPath("$.data.seat.site.site_name").value("本社"));
         }
 
         @Test
