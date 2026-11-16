@@ -2,6 +2,7 @@ package jp.co.frontier.ems.repository;
 
 import jp.co.frontier.ems.entity.EmployeeSkill;
 import jp.co.frontier.ems.entity.EmployeeSkillId;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,4 +18,13 @@ public interface EmployeeSkillRepository extends JpaRepository<EmployeeSkill, Em
      */
     @EntityGraph(attributePaths = "skill")
     List<EmployeeSkill> findByEmployeeEmployeeId(Long employeeId);
+
+    /**
+     * 複数社員のスキル紐付けをまとめて取得する（API 2.1 の一覧用）。
+     *
+     * <p>社員ごとに {@code findByEmployeeEmployeeId} を呼ぶと件数ぶんクエリが
+     * 飛ぶため（1ページ20件なら20回）、社員IDをまとめて渡して1クエリにする。
+     */
+    @EntityGraph(attributePaths = "skill")
+    List<EmployeeSkill> findByEmployeeEmployeeIdIn(Collection<Long> employeeIds);
 }

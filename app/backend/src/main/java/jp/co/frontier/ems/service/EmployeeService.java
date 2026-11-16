@@ -1,7 +1,15 @@
 package jp.co.frontier.ems.service;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import jp.co.frontier.ems.common.PageMeta;
 import jp.co.frontier.ems.common.error.ApiException;
+import jp.co.frontier.ems.common.error.ErrorResponse;
 import jp.co.frontier.ems.dto.EmployeeDetailResponse;
+import jp.co.frontier.ems.dto.EmployeeListItemResponse;
+import jp.co.frontier.ems.dto.EmployeeSearchCriteria;
+import jp.co.frontier.ems.dto.EmployeeSkillResponse;
 import jp.co.frontier.ems.dto.ProfileUpdateRequest;
 import jp.co.frontier.ems.entity.Employee;
 import jp.co.frontier.ems.entity.EmployeeStatus;
@@ -11,6 +19,10 @@ import jp.co.frontier.ems.repository.EmployeeRepository;
 import jp.co.frontier.ems.repository.EmployeeSkillRepository;
 import jp.co.frontier.ems.security.AuthenticatedEmployee;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +73,105 @@ public class EmployeeService {
                         "ログイン中の社員が見つかりません。再度ログインしてください"));
 
         return buildDetail(employee, true);
+    }
+
+    /**
+     * 社員検索・一覧（API 2.1）。
+     *
+     * <p>任意指定のフィルタが10個近くあるため絞り込みは
+     * {@link EmployeeSpecifications} が組む。ここでは並び順・ページング・
+     * 権限の判定と、N+1 を避けたスキルの取得を担う。
+     *
+     * @param viewer 閲覧者。未認証の場合は null
+     */
+    @Transactional(readOnly = true)
+    public PagedResult<EmployeeListItemResponse> search(
+            EmployeeSearchCriteria criteria, AuthenticatedEmployee viewer) {
+
+        // 退職者を含む検索は ADMIN のみ（仕様書 2.1 / 共通事項）。
+        // 403 を返すのは、閲覧権限が無いことを伝えるだけで個々の社員の
+        // 存在は漏れないため。詳細取得（3.1）で 404 にしているのとは事情が違う
+        if (criteria.statusOrDefault() != EmployeeStatus.ACTIVE
+                && (viewer == null || !viewer.isAdmin())) {
+            throw ApiException.forbidden("退職者を含む検索は管理者のみ利用できます");
+        }
+
+        Pageable pageable = PageRequest.of(
+                criteria.pageOrDefault() - 1,   // 仕様は1始まり、Spring Data は0始まり
+                criteria.perPageOrDefault(),
+                toSort(criteria.sort()));
+
+        Page<Employee> page = employeeRepository.findAll(
+                EmployeeSpecifications.from(criteria), pageable);
+
+        Map<Long, List<EmployeeSkillResponse>> skills = findSkillsByEmployee(page.getContent());
+
+        List<EmployeeListItemResponse> rows = page.getContent().stream()
+                .map(e -> EmployeeListItemResponse.from(
+                        e, skills.getOrDefault(e.getEmployeeId(), List.of())))
+                .toList();
+
+        return new PagedResult<>(rows, PageMeta.from(page));
+    }
+
+    /**
+     * 一覧に出すスキルを社員IDごとにまとめて取得する。
+     *
+     * <p>社員ごとに問い合わせると1ページ20件で20クエリ飛ぶため、
+     * IN 句で1クエリにしている。
+     */
+    private Map<Long, List<EmployeeSkillResponse>> findSkillsByEmployee(List<Employee> employees) {
+        if (employees.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = employees.stream().map(Employee::getEmployeeId).toList();
+
+        return employeeSkillRepository.findByEmployeeEmployeeIdIn(ids).stream()
+                .collect(Collectors.groupingBy(
+                        link -> link.getEmployee().getEmployeeId(),
+                        Collectors.mapping(EmployeeSkillResponse::from, Collectors.toList())));
+    }
+
+    /**
+     * {@code sort} クエリパラメータをエンティティの属性名に変換する。
+     *
+     * <p>クライアントが渡すのは JSON のキー名（{@code hire_date}）なので、
+     * そのまま Spring Data に渡すと属性が見つからず 500 になる。
+     * 許可した項目だけを明示的に対応づけ、それ以外は 422 で弾く。
+     */
+    private Sort toSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.by(Sort.Direction.ASC, "employeeCode");
+        }
+
+        boolean descending = sort.startsWith("-");
+        String key = descending ? sort.substring(1) : sort;
+
+        String property = switch (key) {
+            case "employee_code" -> "employeeCode";
+            case "name" -> "name";
+            case "hire_date" -> "hireDate";
+            case "department_id" -> "department.departmentId";
+            default -> null;
+        };
+
+        if (property == null) {
+            throw ApiException.validation(
+                    "sortには employee_code / name / hire_date / department_id のいずれかを"
+                            + "指定してください（降順は先頭に - を付ける）",
+                    List.of(new ErrorResponse.ErrorDetail("sort", "指定できない並び順です")));
+        }
+
+        return Sort.by(descending ? Sort.Direction.DESC : Sort.Direction.ASC, property);
+    }
+
+    /**
+     * 一覧とページ情報の組。
+     *
+     * <p>コントローラで {@code ApiResponse.of(data, meta)} に渡すために、
+     * サービスからは両方を返す必要がある。
+     */
+    public record PagedResult<T>(List<T> rows, PageMeta meta) {
     }
 
     /**
