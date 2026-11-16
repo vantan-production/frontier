@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -88,6 +89,29 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         log.info("権限不足: {}", e.getMessage());
         return ResponseEntity.status(code.getStatus())
                 .body(ErrorResponse.of(code, code.getDefaultMessage(), null));
+    }
+
+    /**
+     * DB制約違反（一意制約・外部キー制約）。
+     *
+     * <p>マスタの削除で参照が残っている場合や、一意制約に引っかかった場合に
+     * 発生する。受けないと catch-all に流れて 500 になるが、いずれも
+     * クライアント側の操作が原因なので 409 が正しい。
+     *
+     * <p>サービス側で事前に確認して個別のメッセージを返している経路もあるが、
+     * ここは<b>最後の砦</b>。アプリ側の判定をすり抜けても 500 にはしない。
+     *
+     * <p>制約名などDBの内部情報はクライアントに返さずログにのみ残す。
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException e) {
+
+        ErrorCode code = ErrorCode.CONFLICT;
+        log.warn("DB制約違反", e);
+        return ResponseEntity.status(code.getStatus())
+                .body(ErrorResponse.of(code,
+                        "他のデータから参照されているか、既に同じ内容が登録されています", null));
     }
 
     /**
